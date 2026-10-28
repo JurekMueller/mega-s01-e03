@@ -1,0 +1,79 @@
+---
+layout: runbook
+title: '#4471 · three problems, three tickets'
+owner: JurekMueller
+status: open
+reviewed: 2026-10-28
+signature: v1.eyJzdWIiOiI0MzU2IiwiYXVkIjoiY2hhbGxlbmdlOndoYXQtaXQtc2hvd3MiLCJpYXQiOjE3OTMxODMxNTksImV4cCI6MTc5MzI2OTU1OX0.AdALUUQ9-6AB8znGDl8tPkY28ll6dpN6weIR8Gka0VE
+---
+
+<script>
+  import ProblemTable from '#lib/kb/ProblemTable.svelte';
+  import CauseTable from '#lib/kb/CauseTable.svelte';
+  import Callout from '#lib/kb/Callout.svelte';
+  import RenderStamp from '#lib/kb/RenderStamp.svelte';
+  import { TICKET_REPO } from '#lib/kb/problems';
+</script>
+
+[#4471](/kb/incidents/4471) holds every report about bookings on the wrong date, merged on subject line
+([decision 0001](/kb/decisions/0001-dedupe-by-subject)) and marked known. Read one by one, the reports
+describe three problems in three places. Each has a different fix, and each now has its own ticket.
+
+<Callout kind="warn">
+#4471 is not one bug. The parser fix closes one of the three problems; the other two need work of their own.
+</Callout>
+
+## The problems
+
+<ProblemTable ticket={4471} />
+
+### `parser`: the shared parser reads dates month first
+
+Every tenant on file writes the day first. The shared parser reads month first, so a date with a day of 12
+or less swaps day and month: "Our 7 April reminder went out on 4 July". This covers reports from every
+tenant that came in by app, by email, or through a `booking-v2` form.
+
+### `hint`: the booking-v3 form asks for the month first
+
+`booking-v3` prints `MM/DD/YYYY` under its date field and then reads the date in the tenant's order, day
+first. People type what the hint says, and the date flips. The report reads like the parser bug, but the
+bug is in the form. It only comes through the booking form of tenants on `booking-v3`.
+
+### `one-day`: dates move one day earlier
+
+These dates do not swap. They move one day back: "Invite says Tuesday 12 May. Calendar says Monday 11 May."
+One report has the same meeting on Tuesday in Lisbon and on Monday in Toronto. That points at a booking date
+sent as a timestamp and shown in the recipient's time zone. The desk already listed these reports as
+one-day moves, but counted them under `parser`.
+
+## After the engineering update
+
+Engineering closed #4471 on 5 October.
+
+- **`parser`: fixed** by `fix(dates): parse dd/mm for eu locales`. Check it before you close the ticket:
+  harbour.dental writes `en-GB`, which writes the day first but is not an EU locale (see its tenant locales
+  above). If the fix keeps a list of EU locales, those reports stay broken. This kb asks the platform
+  whether a locale writes the day first, never a typed list; the fix should do the same.
+- **`hint`: won't fix**, because `booking-v3` is retired. In this export, alder.physio, copper.studio and
+  pale.harbour still run `booking-v3`. Confirm they have moved before you close the ticket.
+- **`one-day`: no fix.** Neither change touches it. New one-day reports go to its ticket, not to #4471.
+
+## Why #4471 looked like one issue
+
+- **Subjects.** The problems share their subject lines (see the note under the table), so merging on subject
+  put them together.
+- **The table on #4471.** It shows the `parser` row as the whole ticket. The one-day moves are inside that
+  row, with one footnote, and `hint` is marked as having no ticket of its own:
+
+<CauseTable ticket={4471} />
+
+- **Intake tags.** Intake guesses `parser` or `hint` from the reporter's browser. The cause follows the
+  tenant: where they are and which form they run.
+
+## For the desk
+
+- Before you merge a report, ask what moved: a day/month swap, or one day. A one-day move is never `parser`.
+- Read the channel and the tenant's form, not only the subject. A form report from a `booking-v3` tenant is `hint`.
+- Tickets live in [the repo that split #4471]({TICKET_REPO}/issues).
+
+<RenderStamp {signature} />
